@@ -34,6 +34,8 @@ sed -i 's|MNC|'$MNC'|g' install/etc/open5gs/amf.yaml
 sed -i 's|MCC|'$MCC'|g' install/etc/open5gs/amf.yaml
 sed -i 's|TAC|'$TAC'|g' install/etc/open5gs/amf.yaml
 sed -i 's|MAX_NUM_UE|'$MAX_NUM_UE'|g' install/etc/open5gs/amf.yaml
+sed -i 's|SST1|'$SST1'|g' install/etc/open5gs/amf.yaml
+sed -i 's|SD1|'$SD1'|g' install/etc/open5gs/amf.yaml
 
 cd install/bin
 exec ./open5gs-amfd $@
