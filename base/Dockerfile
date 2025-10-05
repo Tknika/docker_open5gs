@@ -73,8 +73,8 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg -
     apt-get update && apt install nodejs -y
 
 # Get open5gs code and install
-RUN git clone --recursive https://github.com/herlesupreeth/open5gs && cd open5gs && \
-    git checkout fix_aar_vowifi_reg && meson build --prefix=`pwd`/install && \
+RUN git clone --recursive https://github.com/open5gs/open5gs && cd open5gs && \
+    git checkout tags/v2.6.6 && meson build --prefix=`pwd`/install && \
     ninja -C build && cd build && ninja install && \
     mkdir -p /open5gs/install/include
 
@@ -145,10 +145,10 @@ COPY ../bsf/ /mnt/bsf/
 COPY ../hss/ /mnt/hss/
 COPY ../mme/ /mnt/mme/
 COPY ../nrf/ /mnt/nrf/
-COPY ../scp/ /mnt/scp/
 COPY ../nssf/ /mnt/nssf/
 COPY ../pcf/ /mnt/pcf/ 
 COPY ../pcrf/ /mnt/pcrf/
+COPY ../scp/ /mnt/scp/
 COPY ../sgwc/ /mnt/sgwc/
 COPY ../sgwu/ /mnt/sgwu/
 COPY ../smf/ /mnt/smf/
