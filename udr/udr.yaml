@@ -6,21 +6,24 @@ sbi:
     client:
       no_tls: true
 
-global:
-  max:
-    ue: MAX_NUM_UE
-
 logger:
-    file:
-      path: /open5gs/install/var/log/open5gs/udr.log
+    file: /open5gs/install/var/log/open5gs/udr.log
+
+parameter:
 
 udr:
     sbi:
-      server:
-        - address: UDR_IP
-          port: 7777
-      client:
-        nrf:
-          - uri: http://NRF_IP:7777
-        scp:
-          - uri: http://SCP_IP:7777
+      - addr: UDR_IP
+        port: 7777
+
+scp:
+    sbi:
+      - addr:
+          - SCP_IP
+        port: 7777
+
+nrf:
+    sbi:
+      - addr:
+          - NRF_IP
+        port: 7777

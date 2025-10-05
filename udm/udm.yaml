@@ -1,6 +1,5 @@
 logger:
-    file:
-      path: /open5gs/install/var/log/open5gs/udm.log
+    file: /open5gs/install/var/log/open5gs/udm.log
 
 sbi:
     server:
@@ -8,9 +7,7 @@ sbi:
     client:
       no_tls: true
 
-global:
-  max:
-    ue: MAX_NUM_UE
+parameter:
 
 udm:
     hnet:
@@ -21,11 +18,17 @@ udm:
         scheme: 2
         key: /open5gs/install/etc/open5gs/hnet/secp256r1-2.key
     sbi:
-      server:
-        - address: UDM_IP
-          port: 7777
-      client:
-        nrf:
-          - uri: http://NRF_IP:7777
-        scp:
-          - uri: http://SCP_IP:7777
+      - addr: UDM_IP
+        port: 7777
+
+scp:
+    sbi:
+      - addr:
+          - SCP_IP
+        port: 7777
+
+nrf:
+    sbi:
+      - addr:
+          - NRF_IP
+        port: 7777
