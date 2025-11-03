@@ -174,8 +174,8 @@ services:
       - "2152/udp"
       - "8805/udp"
       - "9091/tcp"
-    # ports:
-    #   - "2152:2152/udp"
+    ports:
+       - "2152:2152/udp"
     cap_add:
       - NET_ADMIN
     privileged: true
@@ -208,8 +208,8 @@ services:
       - "38412/sctp"
       - "7777/tcp"
       - "9091/tcp"
-    # ports:
-    #   - "38412:38412/sctp"
+    ports:
+       - "38412:38412/sctp"
     networks:
       default:
         ipv4_address: ${AMF_IP}
