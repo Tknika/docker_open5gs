@@ -157,6 +157,8 @@ COPY ../udr/ /mnt/udr/
 COPY ../upf/ /mnt/upf/
 COPY ../webui/ /mnt/webui/
 
+RUN mkdir -p /open5gs/install/var/log/open5gs
+
 # Set the working directory to open5gs
 WORKDIR /open5gs
 
