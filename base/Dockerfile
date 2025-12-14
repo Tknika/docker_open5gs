@@ -139,8 +139,26 @@ COPY --from=builder /open5gs/install/lib /open5gs/install/lib
 COPY --from=builder /open5gs/webui /open5gs/webui
 COPY --from=builder /open5gs/misc/db /open5gs/misc/db
 
+COPY ../amf/ /mnt/amf/
+COPY ../ausf/ /mnt/ausf/
+COPY ../bsf/ /mnt/bsf/
+COPY ../hss/ /mnt/hss/
+COPY ../mme/ /mnt/mme/
+COPY ../nrf/ /mnt/nrf/
+COPY ../scp/ /mnt/scp/
+COPY ../nssf/ /mnt/nssf/
+COPY ../pcf/ /mnt/pcf/ 
+COPY ../pcrf/ /mnt/pcrf/
+COPY ../sgwc/ /mnt/sgwc/
+COPY ../sgwu/ /mnt/sgwu/
+COPY ../smf/ /mnt/smf/
+COPY ../udm/ /mnt/udm/
+COPY ../udr/ /mnt/udr/
+COPY ../upf/ /mnt/upf/
+COPY ../webui/ /mnt/webui/
+
 # Set the working directory to open5gs
 WORKDIR /open5gs
 
-COPY open5gs_init.sh /
+COPY base/open5gs_init.sh /
 CMD ["/open5gs_init.sh"]

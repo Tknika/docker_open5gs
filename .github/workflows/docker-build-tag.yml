@@ -1,0 +1,247 @@
+name: Docker Build on Tag
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a construir o formato 'tag::mensaje' (p.ej. v2.7.6-20251212::Folders: base)"
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Extraer el mensaje del tag
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.get_tag.outputs.tag }}
+      tag_message: ${{ steps.get_tag.outputs.message }}
+      folders: ${{ steps.parse_folders.outputs.folders }}
+    steps:
+      - name: Extract clean tag name
+        id: extract_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            # Si es formato "tag::mensaje", extraer solo el nombre del tag
+            if [[ "${{ inputs.tag }}" == *"::"* ]]; then
+              TAG_NAME_CLEAN="$(echo "${{ inputs.tag }}" | sed 's/::.*$//')"
+            else
+              TAG_NAME_CLEAN="${{ inputs.tag }}"
+            fi
+            echo "tag_name_clean=${TAG_NAME_CLEAN}" >> "$GITHUB_OUTPUT"
+          else
+            # En push, extraer del ref
+            TAG_NAME_CLEAN="${GITHUB_REF#refs/tags/}"
+            echo "tag_name_clean=${TAG_NAME_CLEAN}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Tag name (clean): ${TAG_NAME_CLEAN}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', steps.extract_tag.outputs.tag_name_clean) || github.ref }}
+
+      - name: Get tag message
+        id: get_tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            # Permitir formato compuesto: "tag::mensaje"
+            if [[ "${{ inputs.tag }}" == *"::"* ]]; then
+              TAG_NAME="$(echo "${{ inputs.tag }}" | sed 's/::.*$//')"
+              MESSAGE_OVERRIDE="$(echo "${{ inputs.tag }}" | sed 's/^.*:://')"
+            else
+              TAG_NAME="${{ inputs.tag }}"
+              MESSAGE_OVERRIDE=""
+            fi
+          else
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            MESSAGE_OVERRIDE=""
+          fi
+          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
+          # Asegurar que tenemos todos los tags (incluida la anotación)
+          git fetch --force --tags --prune
+
+          # Determinar si el tag es anotado (objeto 'tag') o ligero (apunta a 'commit')
+          TAG_TYPE=$(git cat-file -t "refs/tags/${TAG_NAME}" 2>/dev/null || echo "missing")
+
+          if [ -n "$MESSAGE_OVERRIDE" ]; then
+            TAG_MESSAGE="$MESSAGE_OVERRIDE"
+            TAG_TYPE="manual-override"
+          elif [ "$TAG_TYPE" = "tag" ]; then
+            # Tag anotado: extraer la anotación
+            TAG_MESSAGE=$(git for-each-ref "refs/tags/${TAG_NAME}" --format='%(contents)')
+          else
+            # Tag ligero o no encontrado: no hay anotación
+            TAG_MESSAGE=""
+          fi
+
+          printf 'message<<EOF\n%s\nEOF\n' "$TAG_MESSAGE" >> "$GITHUB_OUTPUT"
+
+          echo "Tag: $TAG_NAME"
+          echo "Tag type: $TAG_TYPE"
+          echo "Message: $TAG_MESSAGE"
+
+      - name: Parse folders from tag message
+        id: parse_folders
+        run: |
+          MESSAGE="${{ steps.get_tag.outputs.message }}"
+
+          # El mensaje override ya fue procesado en get_tag, solo usar MESSAGE
+          # (get_tag ya lo procesó si vino con formato tag::mensaje)
+
+          if [ -n "$MESSAGE_OVERRIDE" ]; then
+            # Buscar línea Folders en el mensaje override
+            FOLDERS_LINE=$(echo "$MESSAGE" | grep -i "^folders:" | head -1)
+            if [ -z "$FOLDERS_LINE" ]; then
+              echo "Mensaje override sin 'Folders:'. Usando todas."
+              FOLDERS="base,ims_base,srslte,srsran,ueransim,dns,mysql,pyhss,osmomsc,osmohlr,metrics,rtpengine,eupf,opensips_ims_base,ocs,osmoepdg,swu_client"
+            else
+              FOLDERS=$(echo "$FOLDERS_LINE" | sed 's/[Ff][Oo][Ll][Dd][Ee][Rr][Ss]:[[:space:]]*//' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '\n' ',')
+              FOLDERS=${FOLDERS%,}
+            fi
+          else
+            # Buscar línea que comience con "folders:" o "FOLDERS:"
+            FOLDERS_LINE=$(echo "$MESSAGE" | grep -i "^folders:" | head -1)
+
+            if [ -z "$FOLDERS_LINE" ]; then
+              # Si no encuentra "folders:", usar todas las carpetas por defecto
+              echo "No se especificaron carpetas. Usando todas."
+              FOLDERS="base,ims_base,srslte,srsran,ueransim,dns,mysql,pyhss,osmomsc,osmohlr,metrics,rtpengine,eupf,opensips_ims_base,ocs,osmoepdg,swu_client"
+            else
+              # Extraer las carpetas después de "folders:"
+              FOLDERS=$(echo "$FOLDERS_LINE" | sed 's/[Ff][Oo][Ll][Dd][Ee][Rr][Ss]:[[:space:]]*//' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '\n' ',')
+              FOLDERS=${FOLDERS%,}  # Remover última coma
+            fi
+          fi
+
+          echo "folders=${FOLDERS}" >> $GITHUB_OUTPUT
+          echo "Carpetas a construir: $FOLDERS"
+
+  # Construir imágenes basadas en el mensaje del tag
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: docker_open5gs
+            context: base
+            file: Dockerfile
+          - image: docker_kamailio
+            context: ims_base
+            file: Dockerfile
+          - image: docker_srslte
+            context: srslte
+            file: Dockerfile
+          - image: docker_srsran
+            context: srsran
+            file: Dockerfile
+          - image: docker_ueransim
+            context: ueransim
+            file: Dockerfile
+          - image: docker_dns
+            context: dns
+            file: Dockerfile
+          - image: docker_mysql
+            context: mysql
+            file: Dockerfile
+          - image: docker_pyhss
+            context: pyhss
+            file: Dockerfile
+          - image: docker_osmomsc
+            context: osmomsc
+            file: Dockerfile
+          - image: docker_osmohlr
+            context: osmohlr
+            file: Dockerfile
+          - image: docker_metrics
+            context: metrics
+            file: Dockerfile
+          - image: docker_rtpengine
+            context: rtpengine
+            file: Dockerfile
+          - image: docker_eupf
+            context: eupf
+            file: Dockerfile
+          - image: docker_opensips
+            context: opensips_ims_base
+            file: Dockerfile
+          - image: docker_ocs
+            context: ocs
+            file: Dockerfile
+          - image: docker_osmoepdg
+            context: osmoepdg
+            file: Dockerfile
+          - image: docker_swu_client
+            context: swu_client
+            file: Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', needs.prepare.outputs.tag_name) || github.ref }}
+
+      - name: Check if folder should be built
+        id: check_folder
+        run: |
+          FOLDERS="${{ needs.prepare.outputs.folders }}"
+          CONTEXT="${{ matrix.context }}"
+
+          # Convertir a minúsculas para comparación
+          FOLDERS_LOWER=$(echo "$FOLDERS" | tr '[:upper:]' '[:lower:]')
+          CONTEXT_LOWER=$(echo "$CONTEXT" | tr '[:upper:]' '[:lower:]')
+
+          if echo ",$FOLDERS_LOWER," | grep -q ",$CONTEXT_LOWER,"; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "✓ Construyendo: $CONTEXT"
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "✗ Saltando: $CONTEXT (no está en la lista de carpetas)"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        if: steps.check_folder.outputs.should_build == 'true'
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        if: steps.check_folder.outputs.should_build == 'true'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        if: steps.check_folder.outputs.should_build == 'true'
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        if: steps.check_folder.outputs.should_build == 'true'
+        with:
+          context: .
+          file: ${{ matrix.context }}/${{ matrix.file }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          no-cache: true
