@@ -40,7 +40,11 @@ sed -i 's|MCC|'$MCC'|g' install/etc/open5gs/mme.yaml
 sed -i 's|TAC|'$TAC'|g' install/etc/open5gs/mme.yaml
 sed -i 's|MME_IP|'$MME_IP'|g' install/etc/open5gs/mme.yaml
 sed -i 's|MME_IF|'$IF_NAME'|g' install/etc/open5gs/mme.yaml
-sed -i 's|OSMOMSC_IP|'$OSMOMSC_IP'|g' install/etc/open5gs/mme.yaml
+if [ -z "$OSMOMSC_IP" ]; then
+	sed -i '/^[[:space:]]*sgsap:/,/^[[:space:]]*gummei:/{/^[[:space:]]*gummei:/!d}' install/etc/open5gs/mme.yaml
+else
+	sed -i 's|OSMOMSC_IP|'$OSMOMSC_IP'|g' install/etc/open5gs/mme.yaml
+fi
 sed -i 's|SGWC_IP|'$SGWC_IP'|g' install/etc/open5gs/mme.yaml
 sed -i 's|SMF_IP|'$SMF_IP'|g' install/etc/open5gs/mme.yaml
 sed -i 's|MAX_NUM_UE|'$MAX_NUM_UE'|g' install/etc/open5gs/mme.yaml
