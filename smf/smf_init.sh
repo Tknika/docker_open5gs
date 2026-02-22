@@ -40,7 +40,7 @@ trim_whitespace() {
 
 generate_dynamic_session_block() {
     local dnn_list="$1"
-    local ipv6_base_prefix="${SMF_DNN_IPV6_BASE:-fd00:230}"
+    local ipv6_base_prefix="${SMF_DNN_IPV6_BASE:-2001:230}"
     local session_block=""
     local dnn_index=1
     local raw_entry entry dnn_name subnet if_name extra gateway_ip ipv6_idx ipv6_subnet ipv6_gateway
