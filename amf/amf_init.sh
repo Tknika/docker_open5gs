@@ -27,6 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 cp /mnt/amf/amf.yaml install/etc/open5gs
+sed -i 's|NETWORK_NAME|'$NETWORK_NAME'|g' install/etc/open5gs/amf.yaml
 sed -i 's|AMF_IP|'$AMF_IP'|g' install/etc/open5gs/amf.yaml
 sed -i 's|SCP_IP|'$SCP_IP'|g' install/etc/open5gs/amf.yaml
 sed -i 's|NRF_IP|'$NRF_IP'|g' install/etc/open5gs/amf.yaml

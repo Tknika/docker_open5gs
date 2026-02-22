@@ -1,6 +1,8 @@
 # Set proper timezone to sync times between docker host and containers
 #TZ=Europe/Berlin
 
+NETWORK_NAME=Open5GS
+
 MCC=001
 MNC=01
 TAC=1
