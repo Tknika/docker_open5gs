@@ -31,6 +31,96 @@ export LANG=C.UTF-8
 export IP_ADDR=$(awk 'END{print $1}' /etc/hosts)
 export IF_NAME=$(ip r | awk '/default/ { print $5 }')
 
+trim_whitespace() {
+    local value="$1"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
+}
+
+generate_dynamic_session_block() {
+    local dnn_list="$1"
+    local ipv6_base_prefix="${SMF_DNN_IPV6_BASE:-fd00:230}"
+    local session_block=""
+    local dnn_index=1
+    local raw_entry entry dnn_name subnet if_name extra gateway_ip ipv6_idx ipv6_subnet ipv6_gateway
+
+    ipv6_base_prefix="${ipv6_base_prefix%:}"
+
+    IFS=';' read -ra dnn_entries <<< "$dnn_list"
+    for raw_entry in "${dnn_entries[@]}"; do
+        entry=$(trim_whitespace "$raw_entry")
+        [ -z "$entry" ] && continue
+
+        IFS=',' read -r dnn_name subnet if_name extra <<< "$entry"
+        dnn_name=$(trim_whitespace "$dnn_name")
+        subnet=$(trim_whitespace "$subnet")
+        if_name=$(trim_whitespace "$if_name")
+        extra=$(trim_whitespace "$extra")
+
+        if [ -z "$dnn_name" ] || [ -z "$subnet" ] || [ -z "$if_name" ] || [ -n "$extra" ]; then
+            echo "Error: Invalid DNN_LIST entry '$entry'. Expected format: <dnn_name>,<subnet>,<interface_name>" >&2
+            return 1
+        fi
+
+        gateway_ip=$(python3 /mnt/smf/ip_utils.py --ip_range "$subnet")
+        if [ $? -ne 0 ] || [ -z "$gateway_ip" ]; then
+            echo "Error: Invalid IPv4 subnet '$subnet' in DNN_LIST entry '$entry'" >&2
+            return 1
+        fi
+
+        ipv6_idx=$(printf '%x' "$dnn_index")
+        ipv6_subnet="${ipv6_base_prefix}:${ipv6_idx}::/48"
+        ipv6_gateway="${ipv6_base_prefix}:${ipv6_idx}::1"
+
+        if [ -z "$session_block" ]; then
+            session_block="    session:\n"
+        fi
+
+        session_block+="      - subnet: ${subnet}\\n"
+        session_block+="        gateway: ${gateway_ip}\\n"
+        session_block+="        dnn: ${dnn_name}\\n"
+        session_block+="      - subnet: ${ipv6_subnet}\\n"
+        session_block+="        gateway: ${ipv6_gateway}\\n"
+        session_block+="        dnn: ${dnn_name}\\n"
+
+        dnn_index=$((dnn_index + 1))
+    done
+
+    if [ -z "$session_block" ]; then
+        echo "Error: DNN_LIST is set but no valid entries were found" >&2
+        return 1
+    fi
+
+    printf '%b' "$session_block"
+}
+
+replace_smf_session_block() {
+    local target_file="$1"
+    local session_block="$2"
+    local tmp_file
+
+    tmp_file=$(mktemp)
+    awk -v session_block="$session_block" '
+        BEGIN { in_session = 0 }
+        {
+            if ($0 ~ /^    session:$/) {
+                print session_block
+                in_session = 1
+                next
+            }
+            if (in_session && $0 ~ /^    dns:$/) {
+                in_session = 0
+                print
+                next
+            }
+            if (!in_session) {
+                print
+            }
+        }
+    ' "$target_file" > "$tmp_file" && mv "$tmp_file" "$target_file"
+}
+
 [ ${#MNC} == 3 ] && EPC_DOMAIN="epc.mnc${MNC}.mcc${MCC}.3gppnetwork.org" || EPC_DOMAIN="epc.mnc0${MNC}.mcc${MCC}.3gppnetwork.org"
 
 UE_IPV4_INTERNET_APN_GATEWAY_IP=$(python3 /mnt/smf/ip_utils.py --ip_range $UE_IPV4_INTERNET)
@@ -43,6 +133,12 @@ then
 fi
 cp /mnt/smf/smf.conf install/etc/freeDiameter
 cp /mnt/smf/make_certs.sh install/etc/freeDiameter
+
+TRIMMED_DNN_LIST=$(trim_whitespace "${DNN_LIST}")
+if [ -n "$TRIMMED_DNN_LIST" ]; then
+    DYNAMIC_SESSION_BLOCK=$(generate_dynamic_session_block "$TRIMMED_DNN_LIST") || exit 1
+    replace_smf_session_block install/etc/open5gs/smf.yaml "$DYNAMIC_SESSION_BLOCK"
+fi
 
 sed -i 's|SMF_IP|'$SMF_IP'|g' install/etc/open5gs/smf.yaml
 sed -i 's|SCP_IP|'$SCP_IP'|g' install/etc/open5gs/smf.yaml
